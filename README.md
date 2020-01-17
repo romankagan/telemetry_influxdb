@@ -1,7 +1,7 @@
 # telemetry_influxdb
 InfluxDB reporter for [Telemetry](https://github.com/beam-telemetry/telemetry)
 
-`Telemetry` reporter for InfluxDB compatibile events.
+`Telemetry` reporter for InfluxDB compatible events.
 
   To use it, start the reporter with the `start_link/1` function, providing it a list of
   `Telemetry` event names:
@@ -79,4 +79,3 @@ TelemetryInfluxDB is copyright (c) 2019 Ludwik Bukowski.
 TelemetryInfluxDB source code is released under MIT license.
 
 See [LICENSE](LICENSE) for more information.
-

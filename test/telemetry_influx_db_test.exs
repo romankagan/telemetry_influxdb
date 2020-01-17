@@ -13,6 +13,7 @@ defmodule TelemetryInfluxDBTest do
     protocol: :udp,
     port: 8087
   }
+
   describe "Invalid reporter configuration - " do
     test "error log message is displayed for invalid influxdb credentials" do
       # given
@@ -218,14 +219,14 @@ defmodule TelemetryInfluxDBTest do
           tags: %{priority: "hig\"h"}
         })
 
-        :telemetry.execute([:event, :special2], %{"coma_space" => "a,b c"}, %{tags: %{}})
+        :telemetry.execute([:event, :special2], %{"comma_space" => "a,b c"}, %{tags: %{}})
 
         ## then
         assert_reported("event.special1", %{"equal_sign" => "a\\\=b"}, %{
           "priority" => "\"hig\\\\\"h\""
         })
 
-        assert_reported("event.special2", %{"coma_space" => "a\\,b\\ c"}, %{})
+        assert_reported("event.special2", %{"comma_space" => "a\\,b\\ c"}, %{})
 
         ## cleanup
         clear_series("event.special1")
@@ -234,7 +235,7 @@ defmodule TelemetryInfluxDBTest do
       end
 
       @tag protocol: protocol
-      test "events are detached after stoping reporter for #{protocol} API", %{
+      test "events are detached after stopping reporter for #{protocol} API", %{
         protocol: protocol
       } do
         ## given
@@ -284,7 +285,7 @@ defmodule TelemetryInfluxDBTest do
       end
 
       @tag protocol: protocol
-      test "events are reported from two independed reporters for #{protocol} API", %{
+      test "events are reported from two independent reporters for #{protocol} API", %{
         protocol: protocol
       } do
         ## given
