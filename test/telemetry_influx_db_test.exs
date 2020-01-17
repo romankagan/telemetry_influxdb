@@ -69,20 +69,74 @@ defmodule TelemetryInfluxDBTest do
     end
 
     test "error log message is displayed for missing db for HTTP" do
-      assert_raise(ArgumentError, fn ->
-        @default_options
-        |> Map.delete(:db)
-        |> Map.put(:protocol, :http)
-        |> Map.put(:events, [given_event_spec([:missing, :db])])
-        |> start_reporter()
-      end)
+      assert_raise(
+        ArgumentError,
+        "for http protocol please specify either the :db field (for InfluxDB v1) or :bucket and :org fields (for InfluxDB v2)",
+        fn ->
+          @default_options
+          |> Map.delete(:db)
+          |> Map.put(:protocol, :http)
+          |> Map.put(:events, [given_event_spec([:missing, :db])])
+          |> start_reporter()
+        end
+      )
     end
 
-    # TODO: Write tests for v2 validation
-    # - explicit v2 option?
-    # - need bucket && (org || orgID)
-    # - don't need db
-    # - must be http - no UDP allowed
+    test "error message is displayed for missing bucket in v2 options" do
+      assert_raise(
+        ArgumentError,
+        "for InfluxDB v2 you need to specify :bucket and :org fields",
+        fn ->
+          @default_options
+          |> be_v2()
+          |> Map.delete(:bucket)
+          |> Map.put(:events, [given_event_spec([:missing, :bucket])])
+          |> start_reporter()
+        end
+      )
+    end
+
+    test "error message is displayed for missing org in v2 options" do
+      assert_raise(
+        ArgumentError,
+        "for InfluxDB v2 you need to specify :bucket and :org fields",
+        fn ->
+          @default_options
+          |> be_v2()
+          |> Map.delete(:org)
+          |> Map.put(:events, [given_event_spec([:missing, :org])])
+          |> start_reporter()
+        end
+      )
+    end
+
+    test "error message is displayed when both v1 and v2 options are provided" do
+      assert_raise(
+        ArgumentError,
+        "for http protocol please specify either the :db field (for InfluxDB v1) or :bucket and :org fields (for InfluxDB v2)",
+        fn ->
+          @default_options
+          |> be_v2()
+          |> Map.put(:db, "myinflux")
+          |> Map.put(:events, [given_event_spec([:both, :versions])])
+          |> start_reporter()
+        end
+      )
+    end
+
+    test "error message is displayed when specifying udp protocol with v2 options" do
+      assert_raise(
+        ArgumentError,
+        "the udp protocol is not currently supported for InfluxDB v2; please use http instead",
+        fn ->
+          @default_options
+          |> be_v2()
+          |> Map.put(:protocol, :udp)
+          |> Map.put(:events, [given_event_spec([:v2, :udp])])
+          |> start_reporter()
+        end
+      )
+    end
   end
 
   describe "Events reported - " do
@@ -443,6 +497,12 @@ defmodule TelemetryInfluxDBTest do
   defp start_reporter(options) do
     {:ok, pid} = TelemetryInfluxDB.start_link(options)
     pid
+  end
+
+  defp be_v2(options) do
+    options
+    |> Map.delete(:db)
+    |> Map.merge(%{protocol: :http, port: 9999, bucket: "myinflux", org: "myorg"})
   end
 
   defp wait_processes_to_die(pids) do
