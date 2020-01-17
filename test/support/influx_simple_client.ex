@@ -1,7 +1,11 @@
+# TODO: Consider writing a v2 simple client instead of using this one
+
 defmodule TelemetryInfluxDB.Test.InfluxSimpleClient do
   def query(config, query) do
     url_encoded = URI.encode_query(%{"q" => query})
 
+    # TODO: build proper URL for v2; maybe extract a helper in the code we can use both here
+    # and in the http event_handler. Also needs to be a POST with a body.
     path =
       config.host <>
         ":" <>
@@ -14,6 +18,8 @@ defmodule TelemetryInfluxDB.Test.InfluxSimpleClient do
   def post(config, query) do
     url_encoded = URI.encode_query(%{"q" => query})
 
+    # TODO: build proper URL for v2; maybe extract a helper in the code we can use both here
+    # and in the http event_handler. Also needs to put the query in the body as `predicate`.
     path =
       config.host <>
         ":" <>

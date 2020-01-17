@@ -1,6 +1,8 @@
 # telemetry_influxdb
 InfluxDB reporter for [Telemetry](https://github.com/beam-telemetry/telemetry)
 
+# TODO: Update with v2 options/instructions
+
 `Telemetry` reporter for InfluxDB compatible events.
 
   To use it, start the reporter with the `start_link/1` function, providing it a list of

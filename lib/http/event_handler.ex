@@ -40,6 +40,7 @@ defmodule TelemetryInfluxDB.HTTP.EventHandler do
           InfluxDB.config()
         ) :: :ok
   def handle_event(event, measurements, metadata, config) do
+    # TODO: Build different URL for v2 and build body correctly
     query = config.host <> ":" <> config.port <> "/write?db=" <> config.db
     event_tags = Map.get(metadata, :tags, %{})
     body = Formatter.format(event, measurements, Map.merge(config.tags, event_tags))

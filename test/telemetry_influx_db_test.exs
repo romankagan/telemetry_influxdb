@@ -77,9 +77,16 @@ defmodule TelemetryInfluxDBTest do
         |> start_reporter()
       end)
     end
+
+    # TODO: Write tests for v2 validation
+    # - explicit v2 option?
+    # - need bucket && (org || orgID)
+    # - don't need db
+    # - must be http - no UDP allowed
   end
 
   describe "Events reported - " do
+    # TODO: Iterate through v1 http, v1 udp, v2 http
     for protocol <- [:http, :udp] do
       @tag protocol: protocol
       test "event is reported when specified by its name for #{protocol} API", %{
@@ -375,12 +382,14 @@ defmodule TelemetryInfluxDBTest do
   end
 
   defp refute_reported(name, config \\ @default_options) do
+    # TODO: Write a flux version of this for v2
     q = "SELECT * FROM \"" <> name <> "\";"
     res = InfluxSimpleClient.query(config, q)
     assert %{"results" => [%{"statement_id" => 0}]} == res
   end
 
   defp assert_reported(name, values, tags \\ %{}, config \\ @default_options) do
+    # TODO: Write a flux version of this for v2
     assert record =
              eventually(fn ->
                q = "SELECT * FROM \"" <> name <> "\";"
@@ -405,6 +414,7 @@ defmodule TelemetryInfluxDBTest do
   end
 
   defp clear_series(name, config \\ @default_options) do
+    # TODO: Write a flux version of this for v2
     q = "DROP SERIES FROM \"" <> name <> "\";"
     InfluxSimpleClient.post(config, q)
 
@@ -414,6 +424,7 @@ defmodule TelemetryInfluxDBTest do
     end)
   end
 
+  # TODO: Add a v2 version of this
   defp start_reporter(:udp, options) do
     @default_options
     |> Map.delete(:db)
