@@ -29,10 +29,12 @@ defmodule TelemetryInfluxDB do
   Possible options for the reporter:
      * `:reporter_name` - unique name for the reporter. The purpose is to distinguish between different reporters running in the system.
      One can run separate independent InfluxDB reporters, with different configurations and goals.
-     * `:protocol` - :udp or :http. Which protocol to use for connecting to InfluxDB. Default option is :udp.
+     * `:protocol` - :udp or :http. Which protocol to use for connecting to InfluxDB. Default option is :udp. InfluxDB v2 only supports :http for now.
      * `:host` - host, where InfluxDB is running.
      * `:port` - port, where InfluxDB is running.
-     * `:db` - name of InfluxDB's  instance.
+     * `:db` - name of InfluxDB's  instance in InfluxDB v1.
+     * `:bucket` - name of the location where time series data is stored in InfluxDB v2
+     * `:org` -  workspace in InfluxDB v2 where a bucket belongs
      * `:username` - username of InfluxDB's user that has writes privileges.
      * `:password` - password for the user.
      * `:events` - list of `Telemetry` events' names that we want to send to InfluxDB.
@@ -64,6 +66,8 @@ defmodule TelemetryInfluxDB do
           | {:protocol, atom()}
           | {:reporter_name, binary()}
           | {:db, String.t()}
+          | {:org, String.t()}
+          | {:bucket, String.t()}
           | {:username, String.t()}
           | {:password, String.t()}
           | {:events, [event]}
