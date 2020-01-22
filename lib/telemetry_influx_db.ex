@@ -32,10 +32,11 @@ defmodule TelemetryInfluxDB do
      * `:protocol` - :udp or :http. Which protocol to use for connecting to InfluxDB. Default option is :udp. InfluxDB v2 only supports :http for now.
      * `:host` - host, where InfluxDB is running.
      * `:port` - port, where InfluxDB is running.
-     * `:version` - the version of InfluxDB to use; either `v1` or `v2`; defaults to `v1` if not provided
+     * `:version` - :v1 or :v2. The version of InfluxDB to use; defaults to :v1 if not provided
      * `:db` - name of InfluxDB's instance in InfluxDB v1.
      * `:bucket` - name of the location where time series data is stored in InfluxDB v2
      * `:org` -  workspace in InfluxDB v2 where a bucket belongs
+     * `:token` - InfluxDB v2 authentication token used for authenticating requests. Must have read and write privaledges to the bucket and org specified.
      * `:username` - username of InfluxDB's user that has writes privileges.
      * `:password` - password for the user.
      * `:events` - list of `Telemetry` events' names that we want to send to InfluxDB.
