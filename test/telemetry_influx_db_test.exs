@@ -24,7 +24,14 @@ defmodule TelemetryInfluxDBTest do
     test "error log message is displayed for invalid influxdb credentials" do
       # given
       event = given_event_spec([:request, :failed])
-      options = make_options(:http, %{events: [event], username: "badguy", password: "wrongpass"})
+
+      options =
+        make_options(%{version: :v1, protocol: :http}, %{
+          events: [event],
+          username: "badguy",
+          password: "wrongpass"
+        })
+
       pid = start_reporter(options)
       testpid = self()
 
@@ -52,7 +59,16 @@ defmodule TelemetryInfluxDBTest do
     test "error log message is displayed for invalid influxdb database" do
       # given
       event = given_event_spec([:users, :count])
-      options = make_options(:http, %{events: [event], db: "yy_postgres"})
+
+      options =
+        make_options(
+          %{
+            version: :v1,
+            protocol: :http
+          },
+          %{events: [event], db: "yy_postgres"}
+        )
+
       pid = start_reporter(options)
       testpid = self()
       :meck.new(TelemetryInfluxDB.HTTP.EventHandler, [:unstick, :passthrough])
@@ -162,14 +178,14 @@ defmodule TelemetryInfluxDBTest do
 
   describe "Events reported - " do
     # TODO: Iterate through v1 http, v1 udp, v2 http
-    for protocol <- [:http, :udp] do
+    for {version, protocol} <- [{:v1, :http}, {:v1, :udp}] do
       @tag protocol: protocol
-      test "event is reported when specified by its name for #{protocol} API", %{
-        protocol: protocol
-      } do
+      @tag version: version
+      test "event is reported when specified by its name for #{version} #{protocol} API",
+           context do
         ## given
         event = given_event_spec([:requests, :failed])
-        options = make_options(protocol, %{events: [event]})
+        options = make_options(context, %{events: [event]})
         pid = start_reporter(options)
 
         ## when
@@ -183,13 +199,12 @@ defmodule TelemetryInfluxDBTest do
         stop_reporter(pid)
       end
 
+      @tag version: version
       @tag protocol: protocol
-      test "event is reported with correct data types for #{protocol} API", %{
-        protocol: protocol
-      } do
+      test "event is reported with correct data types for #{version} #{protocol} API", context do
         ## given
         event = given_event_spec([:calls, :failed])
-        options = make_options(protocol, %{events: [event]})
+        options = make_options(context, %{events: [event]})
         pid = start_reporter(options)
 
         ## when
@@ -215,13 +230,14 @@ defmodule TelemetryInfluxDBTest do
         stop_reporter(pid)
       end
 
+      @tag version: version
       @tag protocol: protocol
-      test "only specified events are reported for #{protocol} API", %{protocol: protocol} do
+      test "only specified events are reported for #{version} #{protocol} API", context do
         ## given
         event1 = given_event_spec([:event, :one])
         event2 = given_event_spec([:event, :two])
         event3 = given_event_spec([:event, :three])
-        options = make_options(protocol, %{events: [event1, event2, event3]})
+        options = make_options(context, %{events: [event1, event2, event3]})
         pid = start_reporter(options)
         ## when
         :telemetry.execute([:event, :one], %{"value" => 1})
@@ -242,15 +258,15 @@ defmodule TelemetryInfluxDBTest do
         stop_reporter(pid)
       end
 
+      @tag version: version
       @tag protocol: protocol
-      test "events are reported with global pre-defined tags for #{protocol} API", %{
-        protocol: protocol
-      } do
+      test "events are reported with global pre-defined tags for #{version} #{protocol} API",
+           context do
         ## given
         event = given_event_spec([:memory, :leak])
 
         options =
-          make_options(protocol, %{
+          make_options(context, %{
             events: [event],
             tags: %{region: :eu_central, time_zone: :cest}
           })
@@ -271,13 +287,13 @@ defmodule TelemetryInfluxDBTest do
         stop_reporter(pid)
       end
 
+      @tag version: version
       @tag protocol: protocol
-      test "events are reported with event-specific tags for #{protocol} API", %{
-        protocol: protocol
-      } do
+      test "events are reported with event-specific tags for #{version} #{protocol} API",
+           context do
         ## given
         event = given_event_spec([:system, :crash])
-        options = make_options(protocol, %{events: [event], tags: %{}})
+        options = make_options(context, %{events: [event], tags: %{}})
         pid = start_reporter(options)
 
         ## when
@@ -293,14 +309,14 @@ defmodule TelemetryInfluxDBTest do
         stop_reporter(pid)
       end
 
+      @tag version: version
       @tag protocol: protocol
-      test "events are reported with special characters for #{protocol} API", %{
-        protocol: protocol
-      } do
+      test "events are reported with special characters for #{version} #{protocol} API",
+           context do
         ## given
         event1 = given_event_spec([:event, :special1])
         event2 = given_event_spec([:event, :special2])
-        options = make_options(protocol, %{events: [event1, event2], tags: %{}})
+        options = make_options(context, %{events: [event1, event2], tags: %{}})
         pid = start_reporter(options)
 
         ## when
@@ -323,14 +339,14 @@ defmodule TelemetryInfluxDBTest do
         stop_reporter(pid)
       end
 
+      @tag version: version
       @tag protocol: protocol
-      test "events are detached after stopping reporter for #{protocol} API", %{
-        protocol: protocol
-      } do
+      test "events are detached after stopping reporter for #{version} #{protocol} API",
+           context do
         ## given
         event_old = given_event_spec([:old, :event])
         event_new = given_event_spec([:new, :event])
-        options = make_options(protocol, %{events: [event_old, event_new]})
+        options = make_options(context, %{events: [event_old, event_new]})
         pid = start_reporter(options)
 
         :telemetry.execute([:old, :event], %{"value" => 1})
@@ -348,13 +364,16 @@ defmodule TelemetryInfluxDBTest do
       end
 
       @tag :capture_log
+      @tag version: version
       @tag protocol: protocol
-      test "events are not reported when reporter receives an exit signal for #{protocol} API",
-           %{protocol: protocol} do
+      test "events are not reported when reporter receives an exit signal for #{version} #{
+             protocol
+           } API",
+           context do
         ## given
         event_first = given_event_spec([:first, :event])
         event_second = given_event_spec([:second, :event])
-        options = make_options(protocol, %{events: [event_first, event_second]})
+        options = make_options(context, %{events: [event_first, event_second]})
         pid = start_reporter(options)
 
         Process.unlink(pid)
@@ -375,16 +394,16 @@ defmodule TelemetryInfluxDBTest do
         refute_reported("second.event")
       end
 
+      @tag version: version
       @tag protocol: protocol
-      test "events are reported from two independent reporters for #{protocol} API", %{
-        protocol: protocol
-      } do
+      test "events are reported from two independent reporters for #{version} #{protocol} API",
+           context do
         ## given
         event1 = given_event_spec([:servers1, :down])
         event2 = given_event_spec([:servers2, :down])
 
         options =
-          make_options(protocol, %{
+          make_options(context, %{
             events: [event1],
             tags: %{region: :eu_central, time_zone: :cest},
             reporter_name: "eu"
@@ -393,7 +412,7 @@ defmodule TelemetryInfluxDBTest do
         pid1 = start_reporter(options)
 
         options =
-          make_options(protocol, %{
+          make_options(context, %{
             events: [event2],
             tags: %{region: :asia, time_zone: :other},
             reporter_name: "asia"
@@ -428,7 +447,7 @@ defmodule TelemetryInfluxDBTest do
   @tag :capture_log
   test "notifying a UDP error and fetching a socket returns a new socket" do
     event = given_event_spec([:some, :event3])
-    options = make_options(:udp, %{events: [event], tags: %{}})
+    options = make_options(%{version: :v1, protocol: :udp}, %{events: [event], tags: %{}})
     start_reporter(options)
     udp = UDP.Connector.get_udp("default")
     Process.exit(udp.socket, :kill)
@@ -514,14 +533,14 @@ defmodule TelemetryInfluxDBTest do
   end
 
   # TODO: Add a v2 version of this
-  defp make_options(:udp, overrides) do
+  defp make_options(%{version: :v1, protocol: :udp}, overrides) do
     @default_options
     |> Map.delete(:db)
     |> Map.merge(%{protocol: :udp, port: 8089})
     |> Map.merge(overrides)
   end
 
-  defp make_options(:http, overrides) do
+  defp make_options(%{version: :v1, protocol: :http}, overrides) do
     @default_options
     |> Map.merge(%{protocol: :http, port: 8087})
     |> Map.merge(overrides)
