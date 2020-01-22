@@ -85,7 +85,7 @@ defmodule TelemetryInfluxDBTest do
     test "error message is displayed for missing bucket in v2 options" do
       assert_raise(
         ArgumentError,
-        "for InfluxDB v2 you need to specify :bucket and :org fields",
+        "for InfluxDB v2 you need to specify :bucket, :org, and :token fields",
         fn ->
           @default_options
           |> be_v2()
@@ -99,12 +99,26 @@ defmodule TelemetryInfluxDBTest do
     test "error message is displayed for missing org in v2 options" do
       assert_raise(
         ArgumentError,
-        "for InfluxDB v2 you need to specify :bucket and :org fields",
+        "for InfluxDB v2 you need to specify :bucket, :org, and :token fields",
         fn ->
           @default_options
           |> be_v2()
           |> Map.delete(:org)
           |> Map.put(:events, [given_event_spec([:missing, :org])])
+          |> start_reporter()
+        end
+      )
+    end
+
+    test "error message is displayed for missing token in v2 options" do
+      assert_raise(
+        ArgumentError,
+        "for InfluxDB v2 you need to specify :bucket, :org, and :token fields",
+        fn ->
+          @default_options
+          |> be_v2()
+          |> Map.delete(:token)
+          |> Map.put(:events, [given_event_spec([:missing, :token])])
           |> start_reporter()
         end
       )
@@ -488,7 +502,14 @@ defmodule TelemetryInfluxDBTest do
   defp be_v2(options) do
     options
     |> Map.delete(:db)
-    |> Map.merge(%{version: :v2, protocol: :http, port: 9999, bucket: "myinflux", org: "myorg"})
+    |> Map.merge(%{
+      version: :v2,
+      token: "mytoken",
+      protocol: :http,
+      port: 9999,
+      bucket: "myinflux",
+      org: "myorg"
+    })
   end
 
   defp wait_processes_to_die(pids) do

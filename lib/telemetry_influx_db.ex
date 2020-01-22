@@ -157,15 +157,11 @@ defmodule TelemetryInfluxDB do
     )
   end
 
-  defp validate_v2_params!(%{protocol: :http, org: _org, bucket: _bucket} = opts),
+  defp validate_v2_params!(%{protocol: :http, org: _org, bucket: _bucket, token: _token} = opts),
     do: opts
 
-  defp validate_v2_params!(%{protocol: :http, org: _org}) do
-    raise(ArgumentError, "for InfluxDB v2 you need to specify :bucket and :org fields")
-  end
-
-  defp validate_v2_params!(%{protocol: :http, bucket: _bucket}) do
-    raise(ArgumentError, "for InfluxDB v2 you need to specify :bucket and :org fields")
+  defp validate_v2_params!(_) do
+    raise(ArgumentError, "for InfluxDB v2 you need to specify :bucket, :org, and :token fields")
   end
 
   defp validate_v1_params!(%{protocol: :udp} = opts), do: opts
