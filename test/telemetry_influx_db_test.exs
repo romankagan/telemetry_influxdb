@@ -71,7 +71,7 @@ defmodule TelemetryInfluxDBTest do
     test "error log message is displayed for missing db for HTTP" do
       assert_raise(
         ArgumentError,
-        "for http protocol please specify either the :db field (for InfluxDB v1) or :bucket and :org fields (for InfluxDB v2)",
+        "for http protocol you need to specify :db field",
         fn ->
           @default_options
           |> Map.delete(:db)
@@ -105,20 +105,6 @@ defmodule TelemetryInfluxDBTest do
           |> be_v2()
           |> Map.delete(:org)
           |> Map.put(:events, [given_event_spec([:missing, :org])])
-          |> start_reporter()
-        end
-      )
-    end
-
-    test "error message is displayed when both v1 and v2 options are provided" do
-      assert_raise(
-        ArgumentError,
-        "for http protocol please specify either the :db field (for InfluxDB v1) or :bucket and :org fields (for InfluxDB v2)",
-        fn ->
-          @default_options
-          |> be_v2()
-          |> Map.put(:db, "myinflux")
-          |> Map.put(:events, [given_event_spec([:both, :versions])])
           |> start_reporter()
         end
       )
@@ -502,7 +488,7 @@ defmodule TelemetryInfluxDBTest do
   defp be_v2(options) do
     options
     |> Map.delete(:db)
-    |> Map.merge(%{protocol: :http, port: 9999, bucket: "myinflux", org: "myorg"})
+    |> Map.merge(%{version: :v2, protocol: :http, port: 9999, bucket: "myinflux", org: "myorg"})
   end
 
   defp wait_processes_to_die(pids) do

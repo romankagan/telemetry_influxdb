@@ -32,7 +32,8 @@ defmodule TelemetryInfluxDB do
      * `:protocol` - :udp or :http. Which protocol to use for connecting to InfluxDB. Default option is :udp. InfluxDB v2 only supports :http for now.
      * `:host` - host, where InfluxDB is running.
      * `:port` - port, where InfluxDB is running.
-     * `:db` - name of InfluxDB's  instance in InfluxDB v1.
+     * `:version` - the version of InfluxDB to use; either `v1` or `v2`; defaults to `v1` if not provided
+     * `:db` - name of InfluxDB's instance in InfluxDB v1.
      * `:bucket` - name of the location where time series data is stored in InfluxDB v2
      * `:org` -  workspace in InfluxDB v2 where a bucket belongs
      * `:username` - username of InfluxDB's user that has writes privileges.
@@ -65,6 +66,7 @@ defmodule TelemetryInfluxDB do
           | {:host, String.t()}
           | {:protocol, atom()}
           | {:reporter_name, binary()}
+          | {:version, atom()}
           | {:db, String.t()}
           | {:org, String.t()}
           | {:bucket, String.t()}
@@ -96,7 +98,7 @@ defmodule TelemetryInfluxDB do
       |> validate_required!([:events])
       |> validate_event_fields!()
       |> validate_protocol!()
-      |> validate_storage_params!()
+      |> validate_version_params!()
 
     create_ets(config.reporter_name)
     specs = child_specs(config.protocol, config)
@@ -144,40 +146,33 @@ defmodule TelemetryInfluxDB do
     raise(ArgumentError, "protocol has to be :udp or :http")
   end
 
-  defp validate_storage_params!(%{protocol: :udp, org: _org, bucket: _bucket}) do
+  defp validate_version_params!(%{version: :v2} = opts), do: validate_v2_params!(opts)
+  defp validate_version_params!(%{version: :v1} = opts), do: validate_v1_params!(opts)
+  defp validate_version_params!(opts), do: validate_v1_params!(opts)
+
+  defp validate_v2_params!(%{protocol: :udp}) do
     raise(
       ArgumentError,
       "the udp protocol is not currently supported for InfluxDB v2; please use http instead"
     )
   end
 
-  defp validate_storage_params!(%{protocol: :udp} = opts), do: opts
+  defp validate_v2_params!(%{protocol: :http, org: _org, bucket: _bucket} = opts),
+    do: opts
 
-  defp validate_storage_params!(%{protocol: :http, db: _db, org: _org, bucket: _bucket}) do
-    raise(
-      ArgumentError,
-      "for http protocol please specify either the :db field (for InfluxDB v1) or :bucket and :org fields (for InfluxDB v2)"
-    )
-  end
-
-  defp validate_storage_params!(%{protocol: :http, org: _org, bucket: _bucket} = opts), do: opts
-
-  defp validate_storage_params!(%{protocol: :http, org: _org}) do
+  defp validate_v2_params!(%{protocol: :http, org: _org}) do
     raise(ArgumentError, "for InfluxDB v2 you need to specify :bucket and :org fields")
   end
 
-  defp validate_storage_params!(%{protocol: :http, bucket: _bucket}) do
+  defp validate_v2_params!(%{protocol: :http, bucket: _bucket}) do
     raise(ArgumentError, "for InfluxDB v2 you need to specify :bucket and :org fields")
   end
 
-  defp validate_storage_params!(%{protocol: :http, db: _db} = opts), do: opts
+  defp validate_v1_params!(%{protocol: :udp} = opts), do: opts
+  defp validate_v1_params!(%{protocol: :http, db: _db} = opts), do: opts
 
-  defp validate_storage_params!(_) do
-    raise(
-      ArgumentError,
-      "for http protocol please specify either the :db field (for InfluxDB v1) or :bucket and :org fields (for InfluxDB v2)"
-    )
-  end
+  defp validate_v1_params!(_),
+    do: raise(ArgumentError, "for http protocol you need to specify :db field")
 
   defp validate_event_fields!(%{events: []}) do
     raise(ArgumentError, "you need to attach to at least one event")
