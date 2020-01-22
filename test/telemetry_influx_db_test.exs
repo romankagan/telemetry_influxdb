@@ -24,7 +24,8 @@ defmodule TelemetryInfluxDBTest do
     test "error log message is displayed for invalid influxdb credentials" do
       # given
       event = given_event_spec([:request, :failed])
-      pid = start_reporter(:http, %{events: [event], username: "badguy", password: "wrongpass"})
+      options = make_options(:http, %{events: [event], username: "badguy", password: "wrongpass"})
+      pid = start_reporter(options)
       testpid = self()
 
       :meck.new(TelemetryInfluxDB.HTTP.EventHandler, [:unstick, :passthrough])
@@ -51,7 +52,8 @@ defmodule TelemetryInfluxDBTest do
     test "error log message is displayed for invalid influxdb database" do
       # given
       event = given_event_spec([:users, :count])
-      pid = start_reporter(:http, %{events: [event], db: "yy_postgres"})
+      options = make_options(:http, %{events: [event], db: "yy_postgres"})
+      pid = start_reporter(options)
       testpid = self()
       :meck.new(TelemetryInfluxDB.HTTP.EventHandler, [:unstick, :passthrough])
 
@@ -167,7 +169,8 @@ defmodule TelemetryInfluxDBTest do
       } do
         ## given
         event = given_event_spec([:requests, :failed])
-        pid = start_reporter(protocol, %{events: [event]})
+        options = make_options(protocol, %{events: [event]})
+        pid = start_reporter(options)
 
         ## when
         :telemetry.execute([:requests, :failed], %{"reason" => "timeout", "retries" => 3})
@@ -186,7 +189,8 @@ defmodule TelemetryInfluxDBTest do
       } do
         ## given
         event = given_event_spec([:calls, :failed])
-        pid = start_reporter(protocol, %{events: [event]})
+        options = make_options(protocol, %{events: [event]})
+        pid = start_reporter(options)
 
         ## when
         :telemetry.execute([:calls, :failed], %{
@@ -217,7 +221,8 @@ defmodule TelemetryInfluxDBTest do
         event1 = given_event_spec([:event, :one])
         event2 = given_event_spec([:event, :two])
         event3 = given_event_spec([:event, :three])
-        pid = start_reporter(protocol, %{events: [event1, event2, event3]})
+        options = make_options(protocol, %{events: [event1, event2, event3]})
+        pid = start_reporter(options)
         ## when
         :telemetry.execute([:event, :one], %{"value" => 1})
         assert_reported("event.one", %{"value" => 1})
@@ -244,11 +249,13 @@ defmodule TelemetryInfluxDBTest do
         ## given
         event = given_event_spec([:memory, :leak])
 
-        pid =
-          start_reporter(protocol, %{
+        options =
+          make_options(protocol, %{
             events: [event],
             tags: %{region: :eu_central, time_zone: :cest}
           })
+
+        pid = start_reporter(options)
 
         ## when
         :telemetry.execute([:memory, :leak], %{"memory_leaked" => 100})
@@ -270,7 +277,8 @@ defmodule TelemetryInfluxDBTest do
       } do
         ## given
         event = given_event_spec([:system, :crash])
-        pid = start_reporter(protocol, %{events: [event], tags: %{}})
+        options = make_options(protocol, %{events: [event], tags: %{}})
+        pid = start_reporter(options)
 
         ## when
         :telemetry.execute([:system, :crash], %{"node_id" => "a3"}, %{tags: %{priority: :high}})
@@ -292,7 +300,8 @@ defmodule TelemetryInfluxDBTest do
         ## given
         event1 = given_event_spec([:event, :special1])
         event2 = given_event_spec([:event, :special2])
-        pid = start_reporter(protocol, %{events: [event1, event2], tags: %{}})
+        options = make_options(protocol, %{events: [event1, event2], tags: %{}})
+        pid = start_reporter(options)
 
         ## when
         :telemetry.execute([:event, :special1], %{"equal_sign" => "a=b"}, %{
@@ -321,7 +330,8 @@ defmodule TelemetryInfluxDBTest do
         ## given
         event_old = given_event_spec([:old, :event])
         event_new = given_event_spec([:new, :event])
-        pid = start_reporter(protocol, %{events: [event_old, event_new]})
+        options = make_options(protocol, %{events: [event_old, event_new]})
+        pid = start_reporter(options)
 
         :telemetry.execute([:old, :event], %{"value" => 1})
         assert_reported("old.event", %{"value" => 1})
@@ -344,7 +354,8 @@ defmodule TelemetryInfluxDBTest do
         ## given
         event_first = given_event_spec([:first, :event])
         event_second = given_event_spec([:second, :event])
-        pid = start_reporter(protocol, %{events: [event_first, event_second]})
+        options = make_options(protocol, %{events: [event_first, event_second]})
+        pid = start_reporter(options)
 
         Process.unlink(pid)
         {:links, child_pids} = :erlang.process_info(pid, :links)
@@ -372,19 +383,23 @@ defmodule TelemetryInfluxDBTest do
         event1 = given_event_spec([:servers1, :down])
         event2 = given_event_spec([:servers2, :down])
 
-        pid1 =
-          start_reporter(protocol, %{
+        options =
+          make_options(protocol, %{
             events: [event1],
             tags: %{region: :eu_central, time_zone: :cest},
             reporter_name: "eu"
           })
 
-        pid2 =
-          start_reporter(protocol, %{
+        pid1 = start_reporter(options)
+
+        options =
+          make_options(protocol, %{
             events: [event2],
             tags: %{region: :asia, time_zone: :other},
             reporter_name: "asia"
           })
+
+        pid2 = start_reporter(options)
 
         ## when
         :telemetry.execute([:servers1, :down], %{"panic?" => "yes"})
@@ -413,7 +428,8 @@ defmodule TelemetryInfluxDBTest do
   @tag :capture_log
   test "notifying a UDP error and fetching a socket returns a new socket" do
     event = given_event_spec([:some, :event3])
-    start_reporter(:udp, %{events: [event], tags: %{}})
+    options = make_options(:udp, %{events: [event], tags: %{}})
+    start_reporter(options)
     udp = UDP.Connector.get_udp("default")
     Process.exit(udp.socket, :kill)
 
@@ -461,8 +477,8 @@ defmodule TelemetryInfluxDBTest do
     assert %{"results" => [%{"statement_id" => 0}]} == res
   end
 
+  # TODO: Write a flux version of this for v2
   defp assert_reported(name, values, tags \\ %{}, config \\ @default_options) do
-    # TODO: Write a flux version of this for v2
     assert record =
              eventually(fn ->
                q = "SELECT * FROM \"" <> name <> "\";"
@@ -498,19 +514,17 @@ defmodule TelemetryInfluxDBTest do
   end
 
   # TODO: Add a v2 version of this
-  defp start_reporter(:udp, options) do
+  defp make_options(:udp, overrides) do
     @default_options
     |> Map.delete(:db)
     |> Map.merge(%{protocol: :udp, port: 8089})
-    |> Map.merge(options)
-    |> start_reporter()
+    |> Map.merge(overrides)
   end
 
-  defp start_reporter(:http, options) do
+  defp make_options(:http, overrides) do
     @default_options
     |> Map.merge(%{protocol: :http, port: 8087})
-    |> Map.merge(options)
-    |> start_reporter()
+    |> Map.merge(overrides)
   end
 
   defp start_reporter(options) do
