@@ -96,6 +96,7 @@ defmodule TelemetryInfluxDB do
       |> Map.put_new(:host, "localhost")
       |> Map.put_new(:port, @default_port)
       |> Map.put_new(:tags, %{})
+      |> Map.put_new(:version, :v1)
       |> validate_required!([:events])
       |> validate_event_fields!()
       |> validate_protocol!()
@@ -149,7 +150,13 @@ defmodule TelemetryInfluxDB do
 
   defp validate_version_params!(%{version: :v2} = opts), do: validate_v2_params!(opts)
   defp validate_version_params!(%{version: :v1} = opts), do: validate_v1_params!(opts)
-  defp validate_version_params!(opts), do: validate_v1_params!(opts)
+
+  defp validate_version_params!(_opts) do
+    raise(
+      ArgumentError,
+      "version must be :v1 or :v2"
+    )
+  end
 
   defp validate_v2_params!(%{protocol: :udp}) do
     raise(

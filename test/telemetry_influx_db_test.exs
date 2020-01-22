@@ -116,6 +116,19 @@ defmodule TelemetryInfluxDBTest do
       )
     end
 
+    test "error message is displayed for invalid version" do
+      assert_raise(
+        ArgumentError,
+        "version must be :v1 or :v2",
+        fn ->
+          @default_options
+          |> Map.put(:version, :bad_version)
+          |> Map.put(:events, [given_event_spec([:invalid, :version])])
+          |> start_reporter()
+        end
+      )
+    end
+
     test "error message is displayed for missing token in v2 options" do
       assert_raise(
         ArgumentError,
