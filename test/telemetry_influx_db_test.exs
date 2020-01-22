@@ -14,6 +14,12 @@ defmodule TelemetryInfluxDBTest do
     port: 8087
   }
 
+  setup_all do
+    token = File.read!(".token")
+
+    {:ok, %{token: token}}
+  end
+
   describe "Invalid reporter configuration - " do
     test "error log message is displayed for invalid influxdb credentials" do
       # given
@@ -82,13 +88,13 @@ defmodule TelemetryInfluxDBTest do
       )
     end
 
-    test "error message is displayed for missing bucket in v2 options" do
+    test "error message is displayed for missing bucket in v2 options", %{token: token} do
       assert_raise(
         ArgumentError,
         "for InfluxDB v2 you need to specify :bucket, :org, and :token fields",
         fn ->
           @default_options
-          |> be_v2()
+          |> be_v2(token)
           |> Map.delete(:bucket)
           |> Map.put(:events, [given_event_spec([:missing, :bucket])])
           |> start_reporter()
@@ -96,13 +102,13 @@ defmodule TelemetryInfluxDBTest do
       )
     end
 
-    test "error message is displayed for missing org in v2 options" do
+    test "error message is displayed for missing org in v2 options", %{token: token} do
       assert_raise(
         ArgumentError,
         "for InfluxDB v2 you need to specify :bucket, :org, and :token fields",
         fn ->
           @default_options
-          |> be_v2()
+          |> be_v2(token)
           |> Map.delete(:org)
           |> Map.put(:events, [given_event_spec([:missing, :org])])
           |> start_reporter()
@@ -504,12 +510,17 @@ defmodule TelemetryInfluxDBTest do
     |> Map.delete(:db)
     |> Map.merge(%{
       version: :v2,
-      token: "mytoken",
       protocol: :http,
       port: 9999,
       bucket: "myinflux",
       org: "myorg"
     })
+  end
+
+  defp be_v2(options, token) do
+    options
+    |> be_v2()
+    |> Map.merge(%{token: token})
   end
 
   defp wait_processes_to_die(pids) do
