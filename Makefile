@@ -48,10 +48,10 @@ wait_for_influx_v2:
 	@echo "DONE"
 
 provision_influx_v2: wait_for_influx_v2
-	curl --fail -i -X POST -H "Content-type: application/json" \
+	curl -sb -X POST -H "Content-type: application/json" \
 		-d "{\"username\":\"${USERNAME}\",\"password\":\"${PASSWORD}\",\"org\":\"myorg\",\"bucket\":\"${STORAGE}\"}" \
-		http://localhost:9999/api/v2/setup >error_provision_v2.log 2>&1 \
-		|| cat error_provision_v2.log
+		http://localhost:9999/api/v2/setup \
+		| jq -j .auth.token > .token
 
 stop_influx: stop_influx_v1 stop_influx_v2
 
