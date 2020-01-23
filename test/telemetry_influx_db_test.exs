@@ -5,13 +5,22 @@ defmodule TelemetryInfluxDBTest do
   import ExUnit.CaptureLog
   import Eventually
 
-  @default_options %{
+  @v1_default_options %{
     db: "myinflux",
     username: "myuser",
     password: "mysecretpassword",
     host: "localhost",
     protocol: :udp,
     port: 8087
+  }
+
+  @v2_default_options %{
+    host: "localhost",
+    port: 9999,
+    protocol: :http,
+    org: "myorg",
+    bucket: "myinflux",
+    token: "socure"
   }
 
   setup_all do
@@ -97,7 +106,7 @@ defmodule TelemetryInfluxDBTest do
         ArgumentError,
         "for http protocol you need to specify :db field",
         fn ->
-          @default_options
+          @v1_default_options
           |> Map.delete(:db)
           |> Map.put(:protocol, :http)
           |> Map.put(:events, [given_event_spec([:missing, :db])])
@@ -111,7 +120,7 @@ defmodule TelemetryInfluxDBTest do
         ArgumentError,
         "for InfluxDB v2 you need to specify :bucket, :org, and :token fields",
         fn ->
-          @default_options
+          @v1_default_options
           |> be_v2(token)
           |> Map.delete(:bucket)
           |> Map.put(:events, [given_event_spec([:missing, :bucket])])
@@ -125,7 +134,7 @@ defmodule TelemetryInfluxDBTest do
         ArgumentError,
         "for InfluxDB v2 you need to specify :bucket, :org, and :token fields",
         fn ->
-          @default_options
+          @v1_default_options
           |> be_v2(token)
           |> Map.delete(:org)
           |> Map.put(:events, [given_event_spec([:missing, :org])])
@@ -139,7 +148,7 @@ defmodule TelemetryInfluxDBTest do
         ArgumentError,
         "version must be :v1 or :v2",
         fn ->
-          @default_options
+          @v1_default_options
           |> Map.put(:version, :bad_version)
           |> Map.put(:events, [given_event_spec([:invalid, :version])])
           |> start_reporter()
@@ -152,7 +161,7 @@ defmodule TelemetryInfluxDBTest do
         ArgumentError,
         "for InfluxDB v2 you need to specify :bucket, :org, and :token fields",
         fn ->
-          @default_options
+          @v1_default_options
           |> be_v2()
           |> Map.delete(:token)
           |> Map.put(:events, [given_event_spec([:missing, :token])])
@@ -166,7 +175,7 @@ defmodule TelemetryInfluxDBTest do
         ArgumentError,
         "the udp protocol is not currently supported for InfluxDB v2; please use http instead",
         fn ->
-          @default_options
+          @v1_default_options
           |> be_v2()
           |> Map.put(:protocol, :udp)
           |> Map.put(:events, [given_event_spec([:v2, :udp])])
@@ -249,7 +258,7 @@ defmodule TelemetryInfluxDBTest do
         :telemetry.execute([:event, :other], %{"value" => "?"})
 
         ## then
-        refute_reported("event.other")
+        refute_reported(context[:version], "event.other")
 
         ## cleanup
         clear_series("event.one")
@@ -357,7 +366,7 @@ defmodule TelemetryInfluxDBTest do
         :telemetry.execute([:new, :event], %{"value" => 2})
 
         ## then
-        refute_reported("new.event")
+        refute_reported(context[:version], "new.event")
 
         ## cleanup
         clear_series("old.event")
@@ -390,8 +399,8 @@ defmodule TelemetryInfluxDBTest do
         :telemetry.execute([:first, :event], %{})
         :telemetry.execute([:second, :event], %{})
 
-        refute_reported("first.event")
-        refute_reported("second.event")
+        refute_reported(context[:version], "first.event")
+        refute_reported(context[:version], "second.event")
       end
 
       @tag version: version
@@ -461,7 +470,7 @@ defmodule TelemetryInfluxDBTest do
   test "events are not reported when reporter is shut down by its supervisor" do
     event_first = given_event_spec([:first, :event])
     event_second = given_event_spec([:second, :event])
-    child_opts = [Map.to_list(@default_options) ++ [events: [event_first, event_second]]]
+    child_opts = [Map.to_list(@v1_default_options) ++ [events: [event_first, event_second]]]
 
     {:ok, supervisor} =
       Supervisor.start_link(
@@ -481,27 +490,47 @@ defmodule TelemetryInfluxDBTest do
     :telemetry.execute([:first, :event], %{})
     :telemetry.execute([:second, :event], %{})
 
-    refute_reported("first.event")
-    refute_reported("second.event")
+    refute_reported(:v1, "first.event")
+    refute_reported(:v1, "second.event")
   end
 
   defp given_event_spec(name) do
     %{name: name}
   end
 
-  defp refute_reported(name, config \\ @default_options) do
-    # TODO: Write a flux version of this for v2
+  defp refute_reported(version, name) do
+    case version do
+      :v1 -> refute_reported(:v1, name, @v1_default_options)
+      :v2 -> refute_reported(:v1, name, @v2_default_options)
+    end
+  end
+
+  defp refute_reported(:v1, name, config) do
     q = "SELECT * FROM \"" <> name <> "\";"
-    res = InfluxSimpleClient.query(config, q)
+    res = InfluxSimpleClient.V1.query(config, q)
     assert %{"results" => [%{"statement_id" => 0}]} == res
   end
 
+  defp refute_reported(:v2, name, config) do
+    q = """
+    from(bucket: "#{config.bucket}")
+    |> range(start: -1m)
+    |> filter(fn: (r) =>
+      r._measurement == "#{name}"
+    )
+    """
+
+    res = InfluxSimpleClient.V2.query(config, q)
+    # TODO: add empty csv empty check
+    assert res == ""
+  end
+
   # TODO: Write a flux version of this for v2
-  defp assert_reported(name, values, tags \\ %{}, config \\ @default_options) do
+  defp assert_reported(name, values, tags \\ %{}, config \\ @v1_default_options) do
     assert record =
              eventually(fn ->
                q = "SELECT * FROM \"" <> name <> "\";"
-               res = InfluxSimpleClient.query(config, q)
+               res = InfluxSimpleClient.V1.query(config, q)
 
                with [inner_map] <- res["results"],
                     [record] <- inner_map["series"] do
@@ -521,27 +550,33 @@ defmodule TelemetryInfluxDBTest do
     assert tag_and_fields == all_vals
   end
 
-  defp clear_series(name, config \\ @default_options) do
+  defp clear_series(name, config \\ @v1_default_options) do
     # TODO: Write a flux version of this for v2
     q = "DROP SERIES FROM \"" <> name <> "\";"
-    InfluxSimpleClient.post(config, q)
+    InfluxSimpleClient.V1.post(config, q)
 
     eventually(fn ->
       q = "SELECT * FROM \"" <> name <> "\";"
-      InfluxSimpleClient.query(config, q) == %{"results" => [%{"statement_id" => 0}]}
+      InfluxSimpleClient.V1.query(config, q) == %{"results" => [%{"statement_id" => 0}]}
     end)
   end
 
   # TODO: Add a v2 version of this
+  defp make_options(%{version: :v2, protocol: :http}, overrides) do
+    @default_v2_options
+    |> Map.merge(%{protocol: :http, port: 9999})
+    |> Map.merge(overrides)
+  end
+
   defp make_options(%{version: :v1, protocol: :udp}, overrides) do
-    @default_options
+    @v1_default_options
     |> Map.delete(:db)
     |> Map.merge(%{protocol: :udp, port: 8089})
     |> Map.merge(overrides)
   end
 
   defp make_options(%{version: :v1, protocol: :http}, overrides) do
-    @default_options
+    @v1_default_options
     |> Map.merge(%{protocol: :http, port: 8087})
     |> Map.merge(overrides)
   end
