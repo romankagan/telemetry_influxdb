@@ -193,10 +193,10 @@ defmodule TelemetryInfluxDBTest do
         :telemetry.execute([:requests, :failed], %{"reason" => "timeout", "retries" => 3})
 
         ## then
-        assert_reported("requests.failed", %{"reason" => "timeout", "retries" => 3})
+        assert_reported(context, "requests.failed", %{"reason" => "timeout", "retries" => 3})
 
         ## cleanup
-        clear_series("requests.failed")
+        clear_series(context, "requests.failed")
         stop_reporter(pid)
       end
 
@@ -218,7 +218,7 @@ defmodule TelemetryInfluxDBTest do
         })
 
         ## then
-        assert_reported("calls.failed", %{
+        assert_reported(context, "calls.failed", %{
           "int" => 4,
           "string_int" => "3",
           "float" => 0.34,
@@ -227,7 +227,7 @@ defmodule TelemetryInfluxDBTest do
         })
 
         ## cleanup
-        clear_series("calls.failed")
+        clear_series(context, "calls.failed")
         stop_reporter(pid)
       end
 
@@ -242,20 +242,20 @@ defmodule TelemetryInfluxDBTest do
         pid = start_reporter(config)
         ## when
         :telemetry.execute([:event, :one], %{"value" => 1})
-        assert_reported("event.one", %{"value" => 1})
+        assert_reported(context, "event.one", %{"value" => 1})
 
         :telemetry.execute([:event, :two], %{"value" => 2})
-        assert_reported("event.two", %{"value" => 2})
+        assert_reported(context, "event.two", %{"value" => 2})
 
         :telemetry.execute([:event, :other], %{"value" => "?"})
 
         ## then
-        refute_reported(config, "event.other")
+        refute_reported(context, "event.other")
 
         ## cleanup
-        clear_series("event.one")
-        clear_series("event.two")
-        clear_series("event.other")
+        clear_series(context, "event.one")
+        clear_series(context, "event.two")
+        clear_series(context, "event.other")
         stop_reporter(pid)
       end
 
@@ -278,13 +278,13 @@ defmodule TelemetryInfluxDBTest do
         :telemetry.execute([:memory, :leak], %{"memory_leaked" => 100})
 
         ## then
-        assert_reported("memory.leak", %{"memory_leaked" => 100}, %{
+        assert_reported(context, "memory.leak", %{"memory_leaked" => 100}, %{
           "region" => "\"eu_central\"",
           "time_zone" => "\"cest\""
         })
 
         ## cleanup
-        clear_series("memory.leak")
+        clear_series(context, "memory.leak")
         stop_reporter(pid)
       end
 
@@ -301,12 +301,12 @@ defmodule TelemetryInfluxDBTest do
         :telemetry.execute([:system, :crash], %{"node_id" => "a3"}, %{tags: %{priority: :high}})
 
         ## then
-        assert_reported("system.crash", %{"node_id" => "a3"}, %{
+        assert_reported(context, "system.crash", %{"node_id" => "a3"}, %{
           "priority" => "\"high\""
         })
 
         ## cleanup
-        clear_series("system.crash")
+        clear_series(context, "system.crash")
         stop_reporter(pid)
       end
 
@@ -328,15 +328,15 @@ defmodule TelemetryInfluxDBTest do
         :telemetry.execute([:event, :special2], %{"comma_space" => "a,b c"}, %{tags: %{}})
 
         ## then
-        assert_reported("event.special1", %{"equal_sign" => "a\\\=b"}, %{
+        assert_reported(context, "event.special1", %{"equal_sign" => "a\\\=b"}, %{
           "priority" => "\"hig\\\\\"h\""
         })
 
-        assert_reported("event.special2", %{"comma_space" => "a\\,b\\ c"}, %{})
+        assert_reported(context, "event.special2", %{"comma_space" => "a\\,b\\ c"}, %{})
 
         ## cleanup
-        clear_series("event.special1")
-        clear_series("event.special2")
+        clear_series(context, "event.special1")
+        clear_series(context, "event.special2")
         stop_reporter(pid)
       end
 
@@ -351,17 +351,17 @@ defmodule TelemetryInfluxDBTest do
         pid = start_reporter(config)
 
         :telemetry.execute([:old, :event], %{"value" => 1})
-        assert_reported("old.event", %{"value" => 1})
+        assert_reported(context, "old.event", %{"value" => 1})
 
         ## when
         TelemetryInfluxDB.stop(pid)
         :telemetry.execute([:new, :event], %{"value" => 2})
 
         ## then
-        refute_reported(config, "new.event")
+        refute_reported(context, "new.event")
 
         ## cleanup
-        clear_series("old.event")
+        clear_series(context, "old.event")
       end
 
       @tag :capture_log
@@ -391,8 +391,8 @@ defmodule TelemetryInfluxDBTest do
         :telemetry.execute([:first, :event], %{})
         :telemetry.execute([:second, :event], %{})
 
-        refute_reported(config, "first.event")
-        refute_reported(config, "second.event")
+        refute_reported(context, "first.event")
+        refute_reported(context, "second.event")
       end
 
       @tag version: version
@@ -426,19 +426,19 @@ defmodule TelemetryInfluxDBTest do
         :telemetry.execute([:servers2, :down], %{"panic?" => "yes"})
 
         ## then
-        assert_reported("servers1.down", %{"panic?" => "yes"}, %{
+        assert_reported(context, "servers1.down", %{"panic?" => "yes"}, %{
           "region" => "\"eu_central\"",
           "time_zone" => "\"cest\""
         })
 
-        assert_reported("servers2.down", %{"panic?" => "yes"}, %{
+        assert_reported(context, "servers2.down", %{"panic?" => "yes"}, %{
           "region" => "\"asia\"",
           "time_zone" => "\"other\""
         })
 
         ## cleanup
-        clear_series("servers1.down")
-        clear_series("servers2.down")
+        clear_series(context, "servers1.down")
+        clear_series(context, "servers2.down")
         stop_reporter(pid1)
         stop_reporter(pid2)
       end
@@ -462,7 +462,9 @@ defmodule TelemetryInfluxDBTest do
   test "events are not reported when reporter is shut down by its supervisor" do
     event_first = given_event_spec([:first, :event])
     event_second = given_event_spec([:second, :event])
-    child_opts = [Map.to_list(@default_config) ++ [events: [event_first, event_second]]]
+    context = %{version: :v1, protocol: :udp}
+    config = make_config(context, %{events: [event_first, event_second]})
+    child_opts = [Map.to_list(config)]
 
     {:ok, supervisor} =
       Supervisor.start_link(
@@ -482,21 +484,26 @@ defmodule TelemetryInfluxDBTest do
     :telemetry.execute([:first, :event], %{})
     :telemetry.execute([:second, :event], %{})
 
-    refute_reported(@default_config, "first.event")
-    refute_reported(@default_config, "second.event")
+    refute_reported(context, "first.event")
+    refute_reported(context, "second.event")
   end
 
   defp given_event_spec(name) do
     %{name: name}
   end
 
-  defp refute_reported(%{version: :v1}, name) do
+  defp refute_reported(context, name) do
+    config = make_assertion_config(context)
+    do_refute_reported(config, name)
+  end
+
+  defp do_refute_reported(%{version: :v1} = config, name) do
     q = "SELECT * FROM \"" <> name <> "\";"
-    res = InfluxSimpleClient.V1.query(@default_config, q)
+    res = InfluxSimpleClient.V1.query(config, q)
     assert %{"results" => [%{"statement_id" => 0}]} == res
   end
 
-  defp refute_reported(%{version: :v2} = config, name) do
+  defp do_refute_reported(%{version: :v2} = config, name) do
     q = """
     from(bucket: "#{config.bucket}")
     |> range(start: -1m)
@@ -510,8 +517,12 @@ defmodule TelemetryInfluxDBTest do
     assert res == ""
   end
 
-  # TODO: Write a flux version of this for v2
-  defp assert_reported(name, values, tags \\ %{}, config \\ @default_config) do
+  defp assert_reported(context, name, values, tags \\ %{}) do
+    config = make_assertion_config(context)
+    do_assert_reported(config, name, values, tags)
+  end
+
+  defp do_assert_reported(%{version: :v1} = config, name, values, tags) do
     assert record =
              eventually(fn ->
                q = "SELECT * FROM \"" <> name <> "\";"
@@ -535,17 +546,21 @@ defmodule TelemetryInfluxDBTest do
     assert tag_and_fields == all_vals
   end
 
-  # defp assert_reported(version, name, values, tags \\ %{}, config \\ @default_config) do
-  #   # TODO:
-  #   #   1. query in flux and assert non-empty response
-  #   #     note to drop generated columns for _start, _stop
-  #   #   2. check header rows look correct with value keys and tag keys
-  #   #   3. check rows contain the measurement name
-  #   #   4. check rows contain the correct values and tags
-  # end
+  defp do_assert_reported(%{version: :v2} = _config, _name, _values, _tags) do
+    #   # TODO:
+    #   #   1. query in flux and assert non-empty response
+    #   #     note to drop generated columns for _start, _stop
+    #   #   2. check header rows look correct with value keys and tag keys
+    #   #   3. check rows contain the measurement name
+    #   #   4. check rows contain the correct values and tags
+  end
 
-  defp clear_series(name, config \\ @default_config) do
-    # TODO: Write a flux version of this for v2
+  defp clear_series(context, name) do
+    config = make_assertion_config(context)
+    do_clear_series(config, name)
+  end
+
+  defp do_clear_series(%{version: :v1} = config, name) do
     q = "DROP SERIES FROM \"" <> name <> "\";"
     InfluxSimpleClient.V1.post(config, q)
 
@@ -555,12 +570,12 @@ defmodule TelemetryInfluxDBTest do
     end)
   end
 
-  # TODO: Add a v2 version of this
-  defp make_config(%{version: :v2, protocol: :http, token: token}, overrides) do
-    @default_config
-    |> be_v2(token)
-    |> Map.merge(%{protocol: :http, port: 9999})
-    |> Map.merge(overrides)
+  defp do_clear_series(%{version: :v2} = _config, _name) do
+    # TODO: Write a flux version of this for v2
+  end
+
+  defp make_assertion_config(context, overrides \\ %{}) do
+    make_config(%{context | protocol: :http}, overrides)
   end
 
   defp make_config(%{version: :v1, protocol: :udp}, overrides) do
@@ -573,6 +588,13 @@ defmodule TelemetryInfluxDBTest do
   defp make_config(%{version: :v1, protocol: :http}, overrides) do
     @default_config
     |> Map.merge(%{protocol: :http, port: 8087})
+    |> Map.merge(overrides)
+  end
+
+  defp make_config(%{version: :v2, protocol: :http, token: token}, overrides) do
+    @default_config
+    |> be_v2(token)
+    |> Map.merge(%{protocol: :http, port: 9999})
     |> Map.merge(overrides)
   end
 
