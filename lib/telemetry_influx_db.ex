@@ -73,6 +73,7 @@ defmodule TelemetryInfluxDB do
           | {:bucket, String.t()}
           | {:username, String.t()}
           | {:password, String.t()}
+          | {:token, String.t()}
           | {:events, [event]}
           | {:tags, tags}
 

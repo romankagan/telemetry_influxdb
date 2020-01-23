@@ -526,7 +526,7 @@ defmodule TelemetryInfluxDBTest do
   end
 
   # TODO: Write a flux version of this for v2
-  defp assert_reported(name, values, tags \\ %{}, config \\ @v1_default_options) do
+  defp assert_reported(version, name, values, tags \\ %{}, config \\ @v1_default_options) do
     assert record =
              eventually(fn ->
                q = "SELECT * FROM \"" <> name <> "\";"
@@ -548,6 +548,15 @@ defmodule TelemetryInfluxDBTest do
 
     assert [[_ | tag_and_fields]] = record["values"]
     assert tag_and_fields == all_vals
+  end
+
+  defp assert_reported(version, name, values, tags \\ %{}, config \\ @v1_default_options) do
+    # TODO:
+    #   1. query in flux and assert non-empty response
+    #     note to drop generated columns for _start, _stop
+    #   2. check header rows look correct with value keys and tag keys
+    #   3. check rows contain the measurement name
+    #   4. check rows contain the correct values and tags
   end
 
   defp clear_series(name, config \\ @v1_default_options) do
