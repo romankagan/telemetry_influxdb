@@ -5,22 +5,14 @@ defmodule TelemetryInfluxDBTest do
   import ExUnit.CaptureLog
   import Eventually
 
-  @v1_default_options %{
+  @default_config %{
+    version: :v1,
     db: "myinflux",
     username: "myuser",
     password: "mysecretpassword",
     host: "localhost",
     protocol: :udp,
     port: 8087
-  }
-
-  @v2_default_options %{
-    host: "localhost",
-    port: 9999,
-    protocol: :http,
-    org: "myorg",
-    bucket: "myinflux",
-    token: "socure"
   }
 
   setup_all do
@@ -34,14 +26,14 @@ defmodule TelemetryInfluxDBTest do
       # given
       event = given_event_spec([:request, :failed])
 
-      options =
-        make_options(%{version: :v1, protocol: :http}, %{
+      config =
+        make_config(%{version: :v1, protocol: :http}, %{
           events: [event],
           username: "badguy",
           password: "wrongpass"
         })
 
-      pid = start_reporter(options)
+      pid = start_reporter(config)
       testpid = self()
 
       :meck.new(TelemetryInfluxDB.HTTP.EventHandler, [:unstick, :passthrough])
@@ -69,8 +61,8 @@ defmodule TelemetryInfluxDBTest do
       # given
       event = given_event_spec([:users, :count])
 
-      options =
-        make_options(
+      config =
+        make_config(
           %{
             version: :v1,
             protocol: :http
@@ -78,7 +70,7 @@ defmodule TelemetryInfluxDBTest do
           %{events: [event], db: "yy_postgres"}
         )
 
-      pid = start_reporter(options)
+      pid = start_reporter(config)
       testpid = self()
       :meck.new(TelemetryInfluxDB.HTTP.EventHandler, [:unstick, :passthrough])
 
@@ -106,7 +98,7 @@ defmodule TelemetryInfluxDBTest do
         ArgumentError,
         "for http protocol you need to specify :db field",
         fn ->
-          @v1_default_options
+          @default_config
           |> Map.delete(:db)
           |> Map.put(:protocol, :http)
           |> Map.put(:events, [given_event_spec([:missing, :db])])
@@ -115,12 +107,12 @@ defmodule TelemetryInfluxDBTest do
       )
     end
 
-    test "error message is displayed for missing bucket in v2 options", %{token: token} do
+    test "error message is displayed for missing bucket in v2 config", %{token: token} do
       assert_raise(
         ArgumentError,
         "for InfluxDB v2 you need to specify :bucket, :org, and :token fields",
         fn ->
-          @v1_default_options
+          @default_config
           |> be_v2(token)
           |> Map.delete(:bucket)
           |> Map.put(:events, [given_event_spec([:missing, :bucket])])
@@ -129,12 +121,12 @@ defmodule TelemetryInfluxDBTest do
       )
     end
 
-    test "error message is displayed for missing org in v2 options", %{token: token} do
+    test "error message is displayed for missing org in v2 config", %{token: token} do
       assert_raise(
         ArgumentError,
         "for InfluxDB v2 you need to specify :bucket, :org, and :token fields",
         fn ->
-          @v1_default_options
+          @default_config
           |> be_v2(token)
           |> Map.delete(:org)
           |> Map.put(:events, [given_event_spec([:missing, :org])])
@@ -148,7 +140,7 @@ defmodule TelemetryInfluxDBTest do
         ArgumentError,
         "version must be :v1 or :v2",
         fn ->
-          @v1_default_options
+          @default_config
           |> Map.put(:version, :bad_version)
           |> Map.put(:events, [given_event_spec([:invalid, :version])])
           |> start_reporter()
@@ -156,13 +148,13 @@ defmodule TelemetryInfluxDBTest do
       )
     end
 
-    test "error message is displayed for missing token in v2 options" do
+    test "error message is displayed for missing token in v2 config", %{token: token} do
       assert_raise(
         ArgumentError,
         "for InfluxDB v2 you need to specify :bucket, :org, and :token fields",
         fn ->
-          @v1_default_options
-          |> be_v2()
+          @default_config
+          |> be_v2(token)
           |> Map.delete(:token)
           |> Map.put(:events, [given_event_spec([:missing, :token])])
           |> start_reporter()
@@ -170,13 +162,13 @@ defmodule TelemetryInfluxDBTest do
       )
     end
 
-    test "error message is displayed when specifying udp protocol with v2 options" do
+    test "error message is displayed when specifying udp protocol with v2 config", %{token: token} do
       assert_raise(
         ArgumentError,
         "the udp protocol is not currently supported for InfluxDB v2; please use http instead",
         fn ->
-          @v1_default_options
-          |> be_v2()
+          @default_config
+          |> be_v2(token)
           |> Map.put(:protocol, :udp)
           |> Map.put(:events, [given_event_spec([:v2, :udp])])
           |> start_reporter()
@@ -194,8 +186,8 @@ defmodule TelemetryInfluxDBTest do
            context do
         ## given
         event = given_event_spec([:requests, :failed])
-        options = make_options(context, %{events: [event]})
-        pid = start_reporter(options)
+        config = make_config(context, %{events: [event]})
+        pid = start_reporter(config)
 
         ## when
         :telemetry.execute([:requests, :failed], %{"reason" => "timeout", "retries" => 3})
@@ -213,8 +205,8 @@ defmodule TelemetryInfluxDBTest do
       test "event is reported with correct data types for #{version} #{protocol} API", context do
         ## given
         event = given_event_spec([:calls, :failed])
-        options = make_options(context, %{events: [event]})
-        pid = start_reporter(options)
+        config = make_config(context, %{events: [event]})
+        pid = start_reporter(config)
 
         ## when
         :telemetry.execute([:calls, :failed], %{
@@ -246,8 +238,8 @@ defmodule TelemetryInfluxDBTest do
         event1 = given_event_spec([:event, :one])
         event2 = given_event_spec([:event, :two])
         event3 = given_event_spec([:event, :three])
-        options = make_options(context, %{events: [event1, event2, event3]})
-        pid = start_reporter(options)
+        config = make_config(context, %{events: [event1, event2, event3]})
+        pid = start_reporter(config)
         ## when
         :telemetry.execute([:event, :one], %{"value" => 1})
         assert_reported("event.one", %{"value" => 1})
@@ -258,7 +250,7 @@ defmodule TelemetryInfluxDBTest do
         :telemetry.execute([:event, :other], %{"value" => "?"})
 
         ## then
-        refute_reported(context[:version], "event.other")
+        refute_reported(config, "event.other")
 
         ## cleanup
         clear_series("event.one")
@@ -274,13 +266,13 @@ defmodule TelemetryInfluxDBTest do
         ## given
         event = given_event_spec([:memory, :leak])
 
-        options =
-          make_options(context, %{
+        config =
+          make_config(context, %{
             events: [event],
             tags: %{region: :eu_central, time_zone: :cest}
           })
 
-        pid = start_reporter(options)
+        pid = start_reporter(config)
 
         ## when
         :telemetry.execute([:memory, :leak], %{"memory_leaked" => 100})
@@ -302,8 +294,8 @@ defmodule TelemetryInfluxDBTest do
            context do
         ## given
         event = given_event_spec([:system, :crash])
-        options = make_options(context, %{events: [event], tags: %{}})
-        pid = start_reporter(options)
+        config = make_config(context, %{events: [event], tags: %{}})
+        pid = start_reporter(config)
 
         ## when
         :telemetry.execute([:system, :crash], %{"node_id" => "a3"}, %{tags: %{priority: :high}})
@@ -325,8 +317,8 @@ defmodule TelemetryInfluxDBTest do
         ## given
         event1 = given_event_spec([:event, :special1])
         event2 = given_event_spec([:event, :special2])
-        options = make_options(context, %{events: [event1, event2], tags: %{}})
-        pid = start_reporter(options)
+        config = make_config(context, %{events: [event1, event2], tags: %{}})
+        pid = start_reporter(config)
 
         ## when
         :telemetry.execute([:event, :special1], %{"equal_sign" => "a=b"}, %{
@@ -355,8 +347,8 @@ defmodule TelemetryInfluxDBTest do
         ## given
         event_old = given_event_spec([:old, :event])
         event_new = given_event_spec([:new, :event])
-        options = make_options(context, %{events: [event_old, event_new]})
-        pid = start_reporter(options)
+        config = make_config(context, %{events: [event_old, event_new]})
+        pid = start_reporter(config)
 
         :telemetry.execute([:old, :event], %{"value" => 1})
         assert_reported("old.event", %{"value" => 1})
@@ -366,7 +358,7 @@ defmodule TelemetryInfluxDBTest do
         :telemetry.execute([:new, :event], %{"value" => 2})
 
         ## then
-        refute_reported(context[:version], "new.event")
+        refute_reported(config, "new.event")
 
         ## cleanup
         clear_series("old.event")
@@ -382,8 +374,8 @@ defmodule TelemetryInfluxDBTest do
         ## given
         event_first = given_event_spec([:first, :event])
         event_second = given_event_spec([:second, :event])
-        options = make_options(context, %{events: [event_first, event_second]})
-        pid = start_reporter(options)
+        config = make_config(context, %{events: [event_first, event_second]})
+        pid = start_reporter(config)
 
         Process.unlink(pid)
         {:links, child_pids} = :erlang.process_info(pid, :links)
@@ -399,8 +391,8 @@ defmodule TelemetryInfluxDBTest do
         :telemetry.execute([:first, :event], %{})
         :telemetry.execute([:second, :event], %{})
 
-        refute_reported(context[:version], "first.event")
-        refute_reported(context[:version], "second.event")
+        refute_reported(config, "first.event")
+        refute_reported(config, "second.event")
       end
 
       @tag version: version
@@ -411,23 +403,23 @@ defmodule TelemetryInfluxDBTest do
         event1 = given_event_spec([:servers1, :down])
         event2 = given_event_spec([:servers2, :down])
 
-        options =
-          make_options(context, %{
+        config =
+          make_config(context, %{
             events: [event1],
             tags: %{region: :eu_central, time_zone: :cest},
             reporter_name: "eu"
           })
 
-        pid1 = start_reporter(options)
+        pid1 = start_reporter(config)
 
-        options =
-          make_options(context, %{
+        config =
+          make_config(context, %{
             events: [event2],
             tags: %{region: :asia, time_zone: :other},
             reporter_name: "asia"
           })
 
-        pid2 = start_reporter(options)
+        pid2 = start_reporter(config)
 
         ## when
         :telemetry.execute([:servers1, :down], %{"panic?" => "yes"})
@@ -456,8 +448,8 @@ defmodule TelemetryInfluxDBTest do
   @tag :capture_log
   test "notifying a UDP error and fetching a socket returns a new socket" do
     event = given_event_spec([:some, :event3])
-    options = make_options(%{version: :v1, protocol: :udp}, %{events: [event], tags: %{}})
-    start_reporter(options)
+    config = make_config(%{version: :v1, protocol: :udp}, %{events: [event], tags: %{}})
+    start_reporter(config)
     udp = UDP.Connector.get_udp("default")
     Process.exit(udp.socket, :kill)
 
@@ -470,7 +462,7 @@ defmodule TelemetryInfluxDBTest do
   test "events are not reported when reporter is shut down by its supervisor" do
     event_first = given_event_spec([:first, :event])
     event_second = given_event_spec([:second, :event])
-    child_opts = [Map.to_list(@v1_default_options) ++ [events: [event_first, event_second]]]
+    child_opts = [Map.to_list(@default_config) ++ [events: [event_first, event_second]]]
 
     {:ok, supervisor} =
       Supervisor.start_link(
@@ -490,28 +482,21 @@ defmodule TelemetryInfluxDBTest do
     :telemetry.execute([:first, :event], %{})
     :telemetry.execute([:second, :event], %{})
 
-    refute_reported(:v1, "first.event")
-    refute_reported(:v1, "second.event")
+    refute_reported(@default_config, "first.event")
+    refute_reported(@default_config, "second.event")
   end
 
   defp given_event_spec(name) do
     %{name: name}
   end
 
-  defp refute_reported(version, name) do
-    case version do
-      :v1 -> refute_reported(:v1, name, @v1_default_options)
-      :v2 -> refute_reported(:v1, name, @v2_default_options)
-    end
-  end
-
-  defp refute_reported(:v1, name, config) do
+  defp refute_reported(%{version: :v1}, name) do
     q = "SELECT * FROM \"" <> name <> "\";"
-    res = InfluxSimpleClient.V1.query(config, q)
+    res = InfluxSimpleClient.V1.query(@default_config, q)
     assert %{"results" => [%{"statement_id" => 0}]} == res
   end
 
-  defp refute_reported(:v2, name, config) do
+  defp refute_reported(%{version: :v2} = config, name) do
     q = """
     from(bucket: "#{config.bucket}")
     |> range(start: -1m)
@@ -526,7 +511,7 @@ defmodule TelemetryInfluxDBTest do
   end
 
   # TODO: Write a flux version of this for v2
-  defp assert_reported(version, name, values, tags \\ %{}, config \\ @v1_default_options) do
+  defp assert_reported(name, values, tags \\ %{}, config \\ @default_config) do
     assert record =
              eventually(fn ->
                q = "SELECT * FROM \"" <> name <> "\";"
@@ -550,16 +535,16 @@ defmodule TelemetryInfluxDBTest do
     assert tag_and_fields == all_vals
   end
 
-  defp assert_reported(version, name, values, tags \\ %{}, config \\ @v1_default_options) do
-    # TODO:
-    #   1. query in flux and assert non-empty response
-    #     note to drop generated columns for _start, _stop
-    #   2. check header rows look correct with value keys and tag keys
-    #   3. check rows contain the measurement name
-    #   4. check rows contain the correct values and tags
-  end
+  # defp assert_reported(version, name, values, tags \\ %{}, config \\ @default_config) do
+  #   # TODO:
+  #   #   1. query in flux and assert non-empty response
+  #   #     note to drop generated columns for _start, _stop
+  #   #   2. check header rows look correct with value keys and tag keys
+  #   #   3. check rows contain the measurement name
+  #   #   4. check rows contain the correct values and tags
+  # end
 
-  defp clear_series(name, config \\ @v1_default_options) do
+  defp clear_series(name, config \\ @default_config) do
     # TODO: Write a flux version of this for v2
     q = "DROP SERIES FROM \"" <> name <> "\";"
     InfluxSimpleClient.V1.post(config, q)
@@ -571,46 +556,46 @@ defmodule TelemetryInfluxDBTest do
   end
 
   # TODO: Add a v2 version of this
-  defp make_options(%{version: :v2, protocol: :http}, overrides) do
-    @default_v2_options
+  defp make_config(%{version: :v2, protocol: :http, token: token}, overrides) do
+    @default_config
+    |> be_v2(token)
     |> Map.merge(%{protocol: :http, port: 9999})
     |> Map.merge(overrides)
   end
 
-  defp make_options(%{version: :v1, protocol: :udp}, overrides) do
-    @v1_default_options
+  defp make_config(%{version: :v1, protocol: :udp}, overrides) do
+    @default_config
     |> Map.delete(:db)
     |> Map.merge(%{protocol: :udp, port: 8089})
     |> Map.merge(overrides)
   end
 
-  defp make_options(%{version: :v1, protocol: :http}, overrides) do
-    @v1_default_options
+  defp make_config(%{version: :v1, protocol: :http}, overrides) do
+    @default_config
     |> Map.merge(%{protocol: :http, port: 8087})
     |> Map.merge(overrides)
   end
 
-  defp start_reporter(options) do
-    {:ok, pid} = TelemetryInfluxDB.start_link(options)
+  defp start_reporter(config) do
+    {:ok, pid} =
+      config
+      |> Map.to_list()
+      |> TelemetryInfluxDB.start_link()
+
     pid
   end
 
-  defp be_v2(options) do
-    options
-    |> Map.delete(:db)
+  defp be_v2(config, token) do
+    config
+    |> Map.drop([:db, :username, :password])
     |> Map.merge(%{
       version: :v2,
       protocol: :http,
       port: 9999,
       bucket: "myinflux",
-      org: "myorg"
+      org: "myorg",
+      token: token
     })
-  end
-
-  defp be_v2(options, token) do
-    options
-    |> be_v2()
-    |> Map.merge(%{token: token})
   end
 
   defp wait_processes_to_die(pids) do
