@@ -1,41 +1,18 @@
 # TODO: Consider writing a v2 simple client instead of using this one
 
 defmodule TelemetryInfluxDB.Test.InfluxSimpleClient do
-  defmodule V2 do
-    def query(config, query) do
-      org_encoded = URI.encode_query(%{"org" => config.org})
+  alias __MODULE__.{V1, V2}
 
-      path =
-        config.host <>
-          ":" <>
-          :erlang.integer_to_binary(config.port) <>
-          "/query?" <>
-          org_encoded
+  def query(%{version: :v1} = config, query) do
+    V1.query(config, query)
+  end
 
-      headers = headers(config)
-      process_response(HTTPoison.post(path, headers))
-    end
+  def query(%{version: :v2} = config, query) do
+    V2.query(config, query)
+  end
 
-    defp process_response({:ok, %HTTPoison.Response{body: body}}) do
-      # TODO: add csv parser and parsing
-      body
-    end
-
-    defp headers(config) do
-      default_headers()
-      |> Map.merge(authentication_header(config.token))
-    end
-
-    def default_headers() do
-      %{
-        "Accept" => "application/csv",
-        "Content-type" => "application/vnd.flux"
-      }
-    end
-
-    defp authentication_header(token) do
-      %{"Authorization" => "Token #{token}"}
-    end
+  def post(%{version: :v1} = config, query) do
+    V1.post(config, query)
   end
 
   defmodule V1 do
@@ -76,6 +53,43 @@ defmodule TelemetryInfluxDB.Test.InfluxSimpleClient do
 
     defp authentication_header(username, password) do
       %{"Authorization" => "Basic #{Base.encode64(username <> ":" <> password)}"}
+    end
+  end
+
+  defmodule V2 do
+    def query(config, query) do
+      org_encoded = URI.encode_query(%{"org" => config.org})
+      body = Jason.encode!(%{query: query})
+
+      path =
+        config.host <>
+          ":" <>
+          :erlang.integer_to_binary(config.port) <>
+          "/api/v2/query?" <>
+          org_encoded
+
+      headers = headers(config)
+      process_response(HTTPoison.post(path, body, headers))
+    end
+
+    defp process_response({:ok, %HTTPoison.Response{body: body}}) do
+      body
+    end
+
+    defp headers(config) do
+      default_headers()
+      |> Map.merge(authentication_header(config.token))
+    end
+
+    def default_headers() do
+      %{
+        "Accept" => "application/csv",
+        "Content-type" => "application/json"
+      }
+    end
+
+    defp authentication_header(token) do
+      %{"Authorization" => "Token #{token}"}
     end
   end
 end
