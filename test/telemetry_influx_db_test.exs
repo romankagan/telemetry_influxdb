@@ -492,6 +492,47 @@ defmodule TelemetryInfluxDBTest do
     %{name: name}
   end
 
+  defp start_reporter(config) do
+    {:ok, pid} =
+      config
+      |> Map.to_list()
+      |> TelemetryInfluxDB.start_link()
+
+    pid
+  end
+
+  defp be_v2(config, token) do
+    config
+    |> Map.drop([:db, :username, :password])
+    |> Map.merge(%{
+      version: :v2,
+      protocol: :http,
+      port: 9999,
+      bucket: "myinflux",
+      org: "myorg",
+      token: token
+    })
+  end
+
+  defp clear_series(context, name) do
+    config = make_assertion_config(context)
+    do_clear_series(config, name)
+  end
+
+  defp do_clear_series(%{version: :v1} = config, name) do
+    q = "DROP SERIES FROM \"" <> name <> "\";"
+    InfluxSimpleClient.V1.post(config, q)
+
+    eventually(fn ->
+      q = "SELECT * FROM \"" <> name <> "\";"
+      InfluxSimpleClient.V1.query(config, q) == %{"results" => [%{"statement_id" => 0}]}
+    end)
+  end
+
+  defp do_clear_series(%{version: :v2} = _config, _name) do
+    # TODO: Write a flux version of this for v2
+  end
+
   defp refute_reported(context, name) do
     config = make_assertion_config(context)
     do_refute_reported(config, name)
@@ -555,25 +596,6 @@ defmodule TelemetryInfluxDBTest do
     #   #   4. check rows contain the correct values and tags
   end
 
-  defp clear_series(context, name) do
-    config = make_assertion_config(context)
-    do_clear_series(config, name)
-  end
-
-  defp do_clear_series(%{version: :v1} = config, name) do
-    q = "DROP SERIES FROM \"" <> name <> "\";"
-    InfluxSimpleClient.V1.post(config, q)
-
-    eventually(fn ->
-      q = "SELECT * FROM \"" <> name <> "\";"
-      InfluxSimpleClient.V1.query(config, q) == %{"results" => [%{"statement_id" => 0}]}
-    end)
-  end
-
-  defp do_clear_series(%{version: :v2} = _config, _name) do
-    # TODO: Write a flux version of this for v2
-  end
-
   defp make_assertion_config(context, overrides \\ %{}) do
     make_config(%{context | protocol: :http}, overrides)
   end
@@ -596,28 +618,6 @@ defmodule TelemetryInfluxDBTest do
     |> be_v2(token)
     |> Map.merge(%{protocol: :http, port: 9999})
     |> Map.merge(overrides)
-  end
-
-  defp start_reporter(config) do
-    {:ok, pid} =
-      config
-      |> Map.to_list()
-      |> TelemetryInfluxDB.start_link()
-
-    pid
-  end
-
-  defp be_v2(config, token) do
-    config
-    |> Map.drop([:db, :username, :password])
-    |> Map.merge(%{
-      version: :v2,
-      protocol: :http,
-      port: 9999,
-      bucket: "myinflux",
-      org: "myorg",
-      token: token
-    })
   end
 
   defp wait_processes_to_die(pids) do
