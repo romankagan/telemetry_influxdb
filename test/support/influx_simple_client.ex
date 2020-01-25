@@ -39,7 +39,12 @@ defmodule TelemetryInfluxDB.Test.InfluxSimpleClient do
   defmodule V2 do
     def query(config, query) do
       org_encoded = URI.encode_query(%{"org" => config.org})
-      body = Jason.encode!(%{query: query})
+
+      body =
+        Jason.encode!(%{
+          dialect: %{annotations: ["datatype"]},
+          query: query
+        })
 
       path =
         config.host <>

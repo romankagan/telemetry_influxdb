@@ -4,9 +4,9 @@ defmodule TelemetryInfluxDBTest do
   import ExUnit.CaptureLog
   import Eventually
 
+  alias TelemetryInfluxDB.Test.FluxParser
   alias TelemetryInfluxDB.Test.InfluxSimpleClient
   alias TelemetryInfluxDB.UDP
-  alias NimbleCSV.RFC4180, as: CSV
 
   @default_config %{
     version: :v1,
@@ -601,11 +601,12 @@ defmodule TelemetryInfluxDBTest do
     """
 
     res = InfluxSimpleClient.V2.query(config, q)
-    CSV.parse_string(res, skip_headers: false)
+    {:ok, tables} = FluxParser.parse_tables(res)
+    tables
   end
 
   defp empty_result?(%{version: :v1}, %{"results" => [%{"statement_id" => 0}]}), do: true
-  defp empty_result?(%{version: :v2}, [[""]]), do: true
+  defp empty_result?(%{version: :v2}, [%{}]), do: true
   defp empty_result?(_, _), do: false
 
   defp make_assertion_config(context, overrides \\ %{}) do
