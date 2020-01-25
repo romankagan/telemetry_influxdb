@@ -519,47 +519,26 @@ defmodule TelemetryInfluxDBTest do
   defp clear_series(context, name) do
     config = make_assertion_config(context)
     do_clear_series(config, name)
+
+    eventually(fn ->
+      empty_result?(config, query(config, name))
+    end)
   end
 
   defp do_clear_series(%{version: :v1} = config, name) do
     q = "DROP SERIES FROM \"" <> name <> "\";"
-    InfluxSimpleClient.post(config, q)
-
-    eventually(fn ->
-      q = "SELECT * FROM \"" <> name <> "\";"
-      InfluxSimpleClient.query(config, q) == %{"results" => [%{"statement_id" => 0}]}
-    end)
+    InfluxSimpleClient.V1.post(config, q)
   end
 
-  defp do_clear_series(%{version: :v2} = _config, _name) do
-    # TODO: Write a flux version of this for v2
+  defp do_clear_series(%{version: :v2} = config, name) do
+    predicate = "_measurement=\"#{name}\""
+    InfluxSimpleClient.V2.delete(config, predicate)
   end
 
   defp refute_reported(context, name) do
     config = make_assertion_config(context)
-    do_refute_reported(config, name)
-  end
-
-  defp do_refute_reported(%{version: :v1} = config, name) do
-    q = "SELECT * FROM \"" <> name <> "\";"
-    res = InfluxSimpleClient.query(config, q)
-    assert %{"results" => [%{"statement_id" => 0}]} == res
-  end
-
-  defp do_refute_reported(%{version: :v2} = config, name) do
-    q = """
-    from(bucket: "#{config.bucket}")
-    |> range(start: -1m)
-    |> filter(fn: (r) =>
-      r._measurement == "#{name}"
-    )
-    |> yield()
-    """
-
-    res = InfluxSimpleClient.query(config, q)
-    csv = CSV.parse_string(res, skip_headers: false)
-
-    assert csv == [[""]]
+    res = query(config, name)
+    assert empty_result?(config, res)
   end
 
   defp assert_reported(context, name, values, tags \\ %{}) do
@@ -570,8 +549,7 @@ defmodule TelemetryInfluxDBTest do
   defp do_assert_reported(%{version: :v1} = config, name, values, tags) do
     assert record =
              eventually(fn ->
-               q = "SELECT * FROM \"" <> name <> "\";"
-               res = InfluxSimpleClient.query(config, q)
+               res = query(config, name)
 
                with [inner_map] <- res["results"],
                     [record] <- inner_map["series"] do
@@ -592,20 +570,43 @@ defmodule TelemetryInfluxDBTest do
   end
 
   defp do_assert_reported(%{version: :v2} = config, name, _values, _tags) do
+    csv =
+      eventually(fn ->
+        res = query(config, name)
+
+        if empty_result?(config, res) do
+          false
+        else
+          res
+        end
+      end)
+
+    IO.inspect(csv)
+  end
+
+  defp query(%{version: :v1} = config, name) do
+    q = "SELECT * FROM \"" <> name <> "\";"
+    InfluxSimpleClient.V1.query(config, q)
+  end
+
+  defp query(%{version: :v2, bucket: bucket} = config, name) do
     q = """
-    from(bucket: "#{config.bucket}")
+    from(bucket: "#{bucket}")
     |> range(start: -1m)
     |> filter(fn: (r) =>
       r._measurement == "#{name}"
     )
+    |> keep(columns: ["_time", "_value", "_field", "_measurement"])
     |> yield()
     """
 
-    res = InfluxSimpleClient.query(config, q)
-    csv = CSV.parse_string(res, skip_headers: false)
-
-    IO.inspect(csv)
+    res = InfluxSimpleClient.V2.query(config, q)
+    CSV.parse_string(res, skip_headers: false)
   end
+
+  defp empty_result?(%{version: :v1}, %{"results" => [%{"statement_id" => 0}]}), do: true
+  defp empty_result?(%{version: :v2}, [[""]]), do: true
+  defp empty_result?(_, _), do: false
 
   defp make_assertion_config(context, overrides \\ %{}) do
     make_config(%{context | protocol: :http}, overrides)
